@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Bolso</title>
+<title>Bolso de Pastelería</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;600;700&family=DM+Mono:wght@400;500&display=swap">
 <style>
@@ -155,6 +155,20 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
+/*
+ * PIPELINE GRÁFICO DE ESTA ESCENA (de vértice local a píxel)
+ *
+ *   p_clip = P · V · M · p_local
+ *
+ *   M (modelo)      -> mueve/rota/escala el objeto en el mundo.     Ver: "MATRIZ DE MODELO" en renderOnce()
+ *   V (vista)       -> coloca el mundo frente a la cámara.          Ver: "MATRIZ DE VISTA" (camera.lookAt)
+ *   P (proyección)  -> perspectiva 3D -> 2D (frustum).              Ver: "MATRIZ DE PROYECCIÓN" (PerspectiveCamera)
+ *
+ * Three.js multiplica P·V·M en el vertex shader de cada material:
+ *   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+ *   (modelViewMatrix = V · M). Después la GPU divide entre w (división de perspectiva)
+ *   y mapea a píxeles con el viewport (renderer.setSize).
+ */
 (function () {
   var stage = document.getElementById('stage');
   var canvas = document.getElementById('gl');
@@ -178,7 +192,20 @@
   renderer.outputEncoding = THREE.sRGBEncoding;
 
   var scene = new THREE.Scene();
+
+  /* ===== MATRIZ DE PROYECCIÓN (P) =====
+   * PerspectiveCamera(fov, aspect, near, far) construye P con Matrix4.makePerspective():
+   *   fov = 32° (campo de visión vertical), near = 0.1, far = 50 (planos del frustum).
+   * El aspect real se asigna en resize() y allí se recalcula P con updateProjectionMatrix().
+   * Para que se vea cómo se arma, resize() también guarda P explícita en `projMatrix`.
+   */
   var camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
+
+  /* ===== MATRIZ DE VISTA (V) =====
+   * V = inversa de la matriz mundo de la cámara (camera.matrixWorldInverse).
+   * position.set() es la traslación de la cámara y lookAt() fija su rotación (apunta al bolso).
+   * three.js calcula V solo, dentro de renderer.render(), con camera.matrixWorld.invert().
+   */
   camera.position.set(0, 0.7, 5.2);
   camera.lookAt(0, 0.05, 0);
 
@@ -271,6 +298,12 @@
   var handle = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.05, 20, 64, Math.PI), leather);
   var capA = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), leather);
   var capB = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), leather);
+  /* TRANSFORMACIONES LOCALES (jerarquía):
+   * handle, capA y capB son hijos de `bag`. Su matriz local M_local (traslación en y = HY,
+   * y en x = ±R más escala = r para las tapas) se compone con la del padre:
+   *   M_mundo(hijo) = M_bag · M_local(hijo)
+   * Así, al girar el bolso, el asa y las tapas giran con él sin código extra.
+   */
   var HY = BB - 0.035;
   handle.position.y = HY; capA.position.y = HY; capB.position.y = HY;
   bag.add(handle, capA, capB);
@@ -279,6 +312,7 @@
     var R = parseFloat(sR.value), r = parseFloat(sr.value);
     handle.geometry.dispose();
     handle.geometry = new THREE.TorusGeometry(R, r, 20, 64, Math.PI);
+    /* Traslación en x (±R) y ESCALA uniforme (r) de las tapas: se guardan en su matriz local. */
     capA.position.x = R; capB.position.x = -R;
     capA.scale.setScalar(r); capB.scale.setScalar(r);
     oR.textContent = R.toFixed(2);
@@ -286,7 +320,9 @@
     vals.textContent = 'R = ' + R.toFixed(2) + ' · r = ' + r.toFixed(2);
   }
 
-  bag.position.y = 0.05;
+  /* La matriz de modelo del bolso se arma a mano en renderOnce() (T · Rx · Ry),
+   * por eso se desactiva el cálculo automático desde position/rotation/scale. */
+  bag.matrixAutoUpdate = false;
   scene.add(bag);
 
   /* Sombra suave en el piso */
@@ -350,11 +386,35 @@
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.position.z = w / h < 1.1 ? 6.4 : 5.2;
-    camera.updateProjectionMatrix();
+    camera.updateProjectionMatrix();   /* <- recalcula la MATRIZ DE PROYECCIÓN con el nuevo aspect */
+    /* Misma matriz P escrita a mano, solo para mostrar de dónde sale:
+     *   top = near · tan(fov/2), right = top · aspect  ->  frustum simétrico */
+    var top = camera.near * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    var right = top * camera.aspect;
+    projMatrix.makePerspective(-right, right, top, -top, camera.near, camera.far);
+    /* projMatrix.elements debe coincidir con camera.projectionMatrix.elements */
     renderOnce();
   }
+
+  var projMatrix = new THREE.Matrix4();   /* P explícita (referencia didáctica) */
+  var Rx = new THREE.Matrix4(), Ry = new THREE.Matrix4(), T = new THREE.Matrix4();
+
   function renderOnce() {
-    bag.rotation.y = rotY; bag.rotation.x = rotX;
+    /* ===== MATRIZ DE MODELO (M) del bolso =====
+     * Se compone en este orden (se aplica de derecha a izquierda sobre cada vértice):
+     *   M = T · Rx · Ry
+     *   Ry: rotación alrededor del eje Y (arrastre horizontal / giro automático)
+     *   Rx: rotación alrededor del eje X (arrastre vertical, inclinación)
+     *   T : traslación (0, 0.05, 0) que sube el bolso sobre su sombra
+     */
+    Ry.makeRotationY(rotY);
+    Rx.makeRotationX(rotX);
+    T.makeTranslation(0, 0.05, 0);
+    bag.matrix.copy(T).multiply(Rx).multiply(Ry);
+    bag.matrixWorldNeedsUpdate = true;   /* obliga a recalcular matrixWorld de bag y sus hijos */
+
+    /* render(): internamente calcula V = inverse(camera.matrixWorld) y, por cada malla,
+     * modelViewMatrix = V · M_mundo; luego el shader aplica P (projectionMatrix). */
     renderer.render(scene, camera);
   }
   function loop() {
