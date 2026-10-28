@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vestido</title>
+<title>Visor 3D - Vestido</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -85,6 +85,9 @@ const niveles = [
 ];
 
 function crearMalla() {
+  // Geometría base del vestido: se definen vértices 3D (x, y, z)
+  // y aristas que conectan esos puntos. Las transformaciones se aplican
+  // después, dentro de proyectar(), antes de dibujar en el lienzo.
   const vertices = [];
   const aristas = [];
   const anillos = [];
@@ -119,11 +122,32 @@ function crearMalla() {
 const malla = crearMalla();
 
 function proyectar(v) {
-  // Rotación alrededor del eje Y.
+  /*
+    MATRIZ DE TRANSFORMACIÓN (rotación sobre el eje Y):
+    Se aplica una rotación 3D a cada vértice usando el ángulo actual.
+    En forma matricial:
+      [ x' ]   [ cos(θ)   0   -sin(θ) ] [ x ]
+      [ y' ] = [   0      1      0    ] [ y ]
+      [ z' ]   [ sin(θ)   0    cos(θ) ] [ z ]
+    Aquí se calculan x' y z'; y permanece igual.
+  */
   const x = v.x * Math.cos(angulo) - v.z * Math.sin(angulo);
   const z = v.x * Math.sin(angulo) + v.z * Math.cos(angulo);
-  // Traslación de cámara y proyección en perspectiva.
+
+  /*
+    TRASLACIÓN DE CÁMARA:
+    zCamara desplaza el objeto respecto a la cámara para situarlo delante
+    de ella. Es equivalente a aplicar una traslación en el eje Z.
+  */
   const zCamara = z + 5.2;
+
+  /*
+    PROYECCIÓN EN PERSPECTIVA:
+    escala = distancia focal / profundidad.
+    Los puntos más alejados (zCamara mayor) se dibujan más pequeños.
+    Después se convierten las coordenadas 3D (x, y, z) a coordenadas 2D
+    del lienzo mediante x de pantalla e y de pantalla.
+  */
   const focal = 510;
   const escala = focal / zCamara;
   return {
@@ -216,6 +240,8 @@ function dibujarVestido() {
 }
 
 function fotograma() {
+  // BUCLE DE ANIMACIÓN: cada fotograma vuelve a proyectar los vértices
+  // con el ángulo actualizado, creando la ilusión de movimiento 3D.
   dibujarFondo();
   dibujarVestido();
   if (animando) angulo += velocidad;
