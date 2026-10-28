@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visor 3D - Vestido</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: #f7e8ef;
+    font-family: Arial, sans-serif;
+    color: #573b52;
+  }
+  .contenedor {
+    width: min(1000px, 96vw);
+    padding: 14px;
+    border-radius: 18px;
+    background: rgba(255,255,255,.88);
+    box-shadow: 0 12px 35px rgba(91,53,76,.2);
+  }
+  h1 { margin: 4px 0 6px; text-align: center; font-size: clamp(1.25rem, 3vw, 2rem); }
+  p { margin: 0 0 12px; text-align: center; font-size: .95rem; }
+  canvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    background: #c5e9ed;
+  }
+  .controles {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    padding-top: 12px;
+  }
+  button {
+    border: 0;
+    border-radius: 999px;
+    padding: 10px 17px;
+    color: white;
+    background: #a95d91;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  button:hover { background: #874873; }
+  .nota { font-size: .82rem; opacity: .85; text-align: center; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main class="contenedor">
+  <h1>Visor 3D: vestido de aristas</h1>
+  <p>Proyección en perspectiva y animación continua sobre el fondo de la pastelería.</p>
+  <canvas id="visor" width="960" height="540" aria-label="Vestido 3D girando sobre el fondo"></canvas>
+  <div class="controles">
+    <button id="pausa">Pausar animación</button>
+    <button id="girar">Cambiar sentido</button>
+    <button id="reiniciar">Reiniciar vista</button>
+  </div>
+  <div class="nota">Solo se usan los colores pastel de la referencia; no hay edificios ni ilustraciones de fondo.</div>
+</main>
+<script>
+const canvas = document.getElementById("visor");
+const ctx = canvas.getContext("2d");
+const W = canvas.width, H = canvas.height;
+
+let angulo = 0;
+let velocidad = 0.008;
+let animando = true;
+
+// Cada nivel describe una sección del vestido: cuello, hombros, cintura y falda.
+const niveles = [
+  { y: -1.75, rx: 0.23, rz: 0.18, n: 8 },  // cuello
+  { y: -1.48, rx: 0.55, rz: 0.30, n: 10 }, // parte superior
+  { y: -0.75, rx: 0.42, rz: 0.25, n: 10 }, // torso
+  { y: -0.45, rx: 0.34, rz: 0.22, n: 10 }, // cintura
+  { y:  0.05, rx: 0.52, rz: 0.32, n: 12 }, // cadera
+  { y:  0.70, rx: 0.88, rz: 0.48, n: 14 }, // falda
+  { y:  1.42, rx: 1.28, rz: 0.67, n: 16 }  // ruedo
+];
+
+function crearMalla() {
+  const vertices = [];
+  const aristas = [];
+  const anillos = [];
+  niveles.forEach((nivel, j) => {
+    const anillo = [];
+    for (let i = 0; i < nivel.n; i++) {
+      const a = (i / nivel.n) * Math.PI * 2;
+      const pliegue = (j >= 4) ? 1 + 0.07 * Math.sin(a * 6) : 1;
+      anillo.push(vertices.length);
+      vertices.push({
+        x: Math.cos(a) * nivel.rx * pliegue,
+        y: nivel.y,
+        z: Math.sin(a) * nivel.rz * pliegue
+      });
+    }
+    anillos.push(anillo);
+    for (let i = 0; i < nivel.n; i++) {
+      aristas.push([anillo[i], anillo[(i + 1) % nivel.n]]);
+    }
+  });
+  for (let j = 0; j < anillos.length - 1; j++) {
+    const a = anillos[j], b = anillos[j + 1];
+    const cantidad = Math.min(a.length, b.length);
+    for (let i = 0; i < cantidad; i++) {
+      aristas.push([a[i], b[i]]);
+      // Aristas diagonales para que la malla se vea como una estructura 3D.
+      aristas.push([a[i], b[(i + 1) % b.length]]);
+    }
+  }
+  return { vertices, aristas };
+}
+const malla = crearMalla();
+
+function proyectar(v) {
+  // Rotación alrededor del eje Y.
+  const x = v.x * Math.cos(angulo) - v.z * Math.sin(angulo);
+  const z = v.x * Math.sin(angulo) + v.z * Math.cos(angulo);
+  // Traslación de cámara y proyección en perspectiva.
+  const zCamara = z + 5.2;
+  const focal = 510;
+  const escala = focal / zCamara;
+  return {
+    x: W * 0.70 + x * escala,
+    y: H * 0.52 + v.y * escala,
+    escala,
+    z
+  };
+}
+
+function dibujarFondo() {
+  // Solo se toma la paleta de colores de la referencia:
+  // azul cielo suave y rosa pastel. No se dibujan edificios ni objetos.
+  const gradiente = ctx.createLinearGradient(0, 0, W, H);
+  gradiente.addColorStop(0, "#c5e9ed");
+  gradiente.addColorStop(0.52, "#f8e6ee");
+  gradiente.addColorStop(1, "#f4d8e2");
+  ctx.fillStyle = gradiente;
+  ctx.fillRect(0, 0, W, H);
+
+  // Halo muy sutil detrás del modelo para mantener el vestido visible.
+  const halo = ctx.createRadialGradient(W * 0.70, H * 0.51, 20, W * 0.70, H * 0.51, 260);
+  halo.addColorStop(0, "rgba(255,255,255,0.60)");
+  halo.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, W, H);
+}
+function dibujarVestido() {
+  const puntos = malla.vertices.map(proyectar);
+
+  // Sombra suave bajo la falda.
+  ctx.save();
+  ctx.fillStyle = "rgba(89,47,77,0.16)";
+  ctx.beginPath();
+  ctx.ellipse(W * 0.70, H * 0.84, 125, 18, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Relleno translúcido entre niveles para distinguir la silueta.
+  for (let j = 0; j < niveles.length - 1; j++) {
+    const inicio = niveles.slice(0, j).reduce((s, n) => s + n.n, 0);
+    const a = niveles[j], b = niveles[j + 1];
+    for (let i = 0; i < a.n; i++) {
+      const i1 = inicio + i;
+      const i2 = inicio + (i + 1) % a.n;
+      const nextStart = inicio + a.n;
+      const b1 = nextStart + (i % b.n);
+      const b2 = nextStart + ((i + 1) % b.n);
+      ctx.beginPath();
+      ctx.moveTo(puntos[i1].x, puntos[i1].y);
+      ctx.lineTo(puntos[i2].x, puntos[i2].y);
+      ctx.lineTo(puntos[b2].x, puntos[b2].y);
+      ctx.lineTo(puntos[b1].x, puntos[b1].y);
+      ctx.closePath();
+      ctx.fillStyle = j >= 4 ? "rgba(232,113,174,0.12)" : "rgba(255,220,238,0.22)";
+      ctx.fill();
+    }
+  }
+
+  // Aristas: se dibujan con un color rosa intenso.
+  ctx.lineWidth = 1.7;
+  ctx.strokeStyle = "#8d3f78";
+  ctx.shadowColor = "rgba(255,255,255,0.8)";
+  ctx.shadowBlur = 3;
+  malla.aristas.forEach(([a, b]) => {
+    const p1 = puntos[a], p2 = puntos[b];
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+  });
+  ctx.shadowBlur = 0;
+
+  // Vértices visibles como pequeños puntos.
+  ctx.fillStyle = "#fff7fc";
+  puntos.forEach(p => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#8d3f78";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  });
+
+  ctx.fillStyle = "#61334f";
+  ctx.font = "bold 18px Arial";
+  ctx.fillText("VESTIDO 3D", 28, 38);
+  ctx.font = "14px Arial";
+  ctx.fillText("Vértices + aristas · Proyección en perspectiva", 28, 61);
+}
+
+function fotograma() {
+  dibujarFondo();
+  dibujarVestido();
+  if (animando) angulo += velocidad;
+  requestAnimationFrame(fotograma);
+}
+
+document.getElementById("pausa").addEventListener("click", () => {
+  animando = !animando;
+  document.getElementById("pausa").textContent = animando ? "Pausar animación" : "Reanudar animación";
+});
+document.getElementById("girar").addEventListener("click", () => velocidad *= -1);
+document.getElementById("reiniciar").addEventListener("click", () => { angulo = 0; velocidad = 0.008; });
+
+fotograma();
+</script>
+</body>
+</html>
