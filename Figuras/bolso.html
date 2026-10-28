@@ -1,0 +1,433 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Bolso de Pastelería</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;600;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: escenario 3D con skyline pastel a la izquierda, panel de controles a la derecha; en móvil se apilan. */
+  :root {
+    --bg: #fff6f3;
+    --fg: #4a2a38;
+    --muted: #8d6676;
+    --panel: #ffffff;
+    --line: #f0d3d9;
+    --accent: #c98ca8;
+    --accent-ink: #ffffff;
+    --teal: #4f9fb6;
+    --sky-top: #bfe3ea;
+    --sky-bot: #fbe0e5;
+    --city-far: #f6d6dc;
+    --city-near: #d9a3b9;
+    --pavement: #f2d3bb;
+    --font-display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+    --font-body: "Nunito", system-ui, sans-serif;
+    --font-mono: "DM Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #201a2b; --fg: #f8e6ea; --muted: #b99aab; --panel: #2c2438; --line: #473a57;
+      --accent: #e3a3c0; --accent-ink: #2b1a26; --teal: #7cc3d6;
+      --sky-top: #2f3560; --sky-bot: #6a4565; --city-far: #4a3a68; --city-near: #6d4f7e; --pavement: #8a6068;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #201a2b; --fg: #f8e6ea; --muted: #b99aab; --panel: #2c2438; --line: #473a57;
+    --accent: #e3a3c0; --accent-ink: #2b1a26; --teal: #7cc3d6;
+    --sky-top: #2f3560; --sky-bot: #6a4565; --city-far: #4a3a68; --city-near: #6d4f7e; --pavement: #8a6068;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: var(--font-body); font-size: 16px; line-height: 1.5;
+    padding-block: 28px 40px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 22px; }
+  header { display: grid; gap: 4px; }
+  h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(28px, 5vw, 40px); line-height: 1.1; margin: 0; text-wrap: balance; }
+  header p { margin: 0; color: var(--muted); max-width: 60ch; }
+
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 22px; align-items: start; }
+  @media (max-width: 800px) { .main { grid-template-columns: minmax(0, 1fr); } }
+
+  .stage {
+    position: relative; overflow: hidden; border-radius: 22px;
+    aspect-ratio: 4 / 3; min-height: 340px; max-width: 100%;
+    background: linear-gradient(180deg, var(--sky-top), var(--sky-bot));
+    touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none;
+  }
+  .stage.drag { cursor: grabbing; }
+  @media (max-width: 520px) { .stage { aspect-ratio: 1 / 1; } }
+  .stage svg.city { position: absolute; inset: auto 0 0 0; width: 100%; height: 78%; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .hint {
+    position: absolute; left: 14px; bottom: 12px; font-size: 13px; font-weight: 700;
+    color: var(--fg); background: color-mix(in srgb, var(--panel) 80%, transparent);
+    padding: 4px 11px; border-radius: 99px; pointer-events: none;
+  }
+  .nogl { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; font-weight: 700; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 20px; display: grid; gap: 20px; min-width: 0; }
+  .panel h2 { font-family: var(--font-display); font-weight: 600; font-size: 20px; margin: 0; }
+  .ctl { display: grid; gap: 6px; }
+  .ctl-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .ctl label { font-weight: 700; }
+  .ctl output { font-family: var(--font-mono); font-size: 14px; color: var(--accent); font-weight: 500; }
+  .ctl small { color: var(--muted); font-size: 13px; }
+
+  input[type=range] { width: 100%; height: 28px; background: transparent; -webkit-appearance: none; appearance: none; accent-color: var(--accent); }
+  input[type=range]::-webkit-slider-runnable-track { height: 8px; border-radius: 99px; background: var(--line); }
+  input[type=range]::-moz-range-track { height: 8px; border-radius: 99px; background: var(--line); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; margin-top: -8px; border-radius: 50%; background: var(--accent); border: 3px solid var(--panel); box-shadow: 0 0 0 1.5px var(--accent); }
+  input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--accent); border: 3px solid var(--panel); box-shadow: 0 0 0 1.5px var(--accent); }
+  input[type=range]:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; border-radius: 8px; }
+
+  .btns { display: flex; flex-wrap: wrap; gap: 10px; }
+  button {
+    font: 700 15px var(--font-body); padding: 10px 16px; border-radius: 99px; cursor: pointer;
+    border: 1.5px solid var(--accent); background: transparent; color: var(--fg);
+  }
+  button.primary { background: var(--accent); color: var(--accent-ink); }
+  button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+  .eq { font-family: var(--font-mono); font-size: 13px; line-height: 1.7; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 16px; overflow-x: auto; }
+  .eq b { color: var(--fg); font-weight: 500; }
+  .status { min-height: 20px; font-size: 13px; color: var(--teal); font-weight: 700; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Bolso de Pastelería</h1>
+    <p>Modelo 3D para el videojuego. El asa es un toroide paramétrico: cambia su radio y su grosor y el bolso se reconstruye al instante.</p>
+  </header>
+
+  <div class="main">
+    <div class="stage" id="stage">
+      <svg class="city" viewBox="0 0 800 400" preserveAspectRatio="none" aria-hidden="true">
+        <g fill="var(--city-far)">
+          <rect x="30" y="170" width="70" height="230"/><rect x="110" y="110" width="50" height="290"/>
+          <rect x="300" y="60" width="44" height="340"/><rect x="560" y="20" width="56" height="380"/>
+          <rect x="640" y="130" width="60" height="270"/><polygon points="170,400 170,190 215,150 260,190 260,400"/>
+        </g>
+        <g fill="var(--city-near)">
+          <rect x="0" y="130" width="46" height="270"/><rect x="60" y="250" width="100" height="150"/>
+          <polygon points="620,400 620,210 700,150 760,210 760,400"/><rect x="740" y="200" width="60" height="200"/>
+          <rect x="400" y="270" width="90" height="130"/><path d="M200 400 V300 a45 45 0 0 1 90 0 V400z"/>
+        </g>
+        <rect x="0" y="330" width="800" height="70" fill="var(--pavement)"/>
+      </svg>
+      <canvas id="gl" aria-label="Bolso en 3D, arrastra para girarlo" role="img"></canvas>
+      <span class="hint">Arrastra para girar</span>
+    </div>
+
+    <aside class="panel">
+      <h2>Parámetros del asa</h2>
+      <div class="ctl">
+        <div class="ctl-top"><label for="sR">Radio del asa (R)</label><output id="oR" for="sR">0.50</output></div>
+        <input type="range" id="sR" min="0.25" max="0.70" step="0.01" value="0.50">
+        <small>Qué tan abierto es el arco.</small>
+      </div>
+      <div class="ctl">
+        <div class="ctl-top"><label for="sr">Grosor del asa (r)</label><output id="or" for="sr">0.05</output></div>
+        <input type="range" id="sr" min="0.02" max="0.10" step="0.005" value="0.05">
+        <small>Radio del tubo de cuero.</small>
+      </div>
+      <div class="btns">
+        <button type="button" id="spin" aria-pressed="false">Girar solo</button>
+        <button type="button" id="reset">Restablecer</button>
+        <button type="button" id="copy" class="primary">Copiar valores</button>
+      </div>
+      <div class="status" id="status" role="status"></div>
+      <div class="eq">
+        <b>Toroide (arco u ∈ [0, π])</b><br>
+        x = (R + r·cos v)·cos u<br>
+        y = (R + r·cos v)·sin u<br>
+        z = r·sin v<br>
+        <b id="vals">R = 0.50 · r = 0.05</b>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/*
+ * PIPELINE GRÁFICO DE ESTA ESCENA (de vértice local a píxel)
+ *
+ *   p_clip = P · V · M · p_local
+ *
+ *   M (modelo)      -> mueve/rota/escala el objeto en el mundo.     Ver: "MATRIZ DE MODELO" en renderOnce()
+ *   V (vista)       -> coloca el mundo frente a la cámara.          Ver: "MATRIZ DE VISTA" (camera.lookAt)
+ *   P (proyección)  -> perspectiva 3D -> 2D (frustum).              Ver: "MATRIZ DE PROYECCIÓN" (PerspectiveCamera)
+ *
+ * Three.js multiplica P·V·M en el vertex shader de cada material:
+ *   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+ *   (modelViewMatrix = V · M). Después la GPU divide entre w (división de perspectiva)
+ *   y mapea a píxeles con el viewport (renderer.setSize).
+ */
+(function () {
+  var stage = document.getElementById('stage');
+  var canvas = document.getElementById('gl');
+  var sR = document.getElementById('sR'), sr = document.getElementById('sr');
+  var oR = document.getElementById('oR'), or_ = document.getElementById('or');
+  var vals = document.getElementById('vals'), statusEl = document.getElementById('status');
+  var spinBtn = document.getElementById('spin');
+  var DEF = { R: 0.5, r: 0.05 };
+
+  var renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  } catch (e) {
+    var msg = document.createElement('div');
+    msg.className = 'nogl';
+    msg.textContent = 'Tu navegador no pudo iniciar WebGL, así que no se puede mostrar el modelo 3D.';
+    stage.appendChild(msg);
+    return;
+  }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+
+  var scene = new THREE.Scene();
+
+  /* ===== MATRIZ DE PROYECCIÓN (P) =====
+   * PerspectiveCamera(fov, aspect, near, far) construye P con Matrix4.makePerspective():
+   *   fov = 32° (campo de visión vertical), near = 0.1, far = 50 (planos del frustum).
+   * El aspect real se asigna en resize() y allí se recalcula P con updateProjectionMatrix().
+   * Para que se vea cómo se arma, resize() también guarda P explícita en `projMatrix`.
+   */
+  var camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
+
+  /* ===== MATRIZ DE VISTA (V) =====
+   * V = inversa de la matriz mundo de la cámara (camera.matrixWorldInverse).
+   * position.set() es la traslación de la cámara y lookAt() fija su rotación (apunta al bolso).
+   * three.js calcula V solo, dentro de renderer.render(), con camera.matrixWorld.invert().
+   */
+  camera.position.set(0, 0.7, 5.2);
+  camera.lookAt(0, 0.05, 0);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xf3c9d2, 0.95));
+  var sun = new THREE.DirectionalLight(0xffffff, 0.75);
+  sun.position.set(2.5, 3.5, 3);
+  scene.add(sun);
+  var rim = new THREE.DirectionalLight(0xbfe3ea, 0.35);
+  rim.position.set(-3, 1, -2);
+  scene.add(rim);
+
+  /* ---------- Superficie paramétrica propia (superelipsoide) ---------- */
+  function sgnPow(w, m) { return Math.sign(w) * Math.pow(Math.abs(w), m); }
+  function buildSurface(fn, nu, nv) {
+    var pos = [], uv = [], idx = [];
+    for (var j = 0; j <= nv; j++) {
+      for (var i = 0; i <= nu; i++) {
+        var p = fn(i / nu, j / nv);
+        pos.push(p[0], p[1], p[2]);
+        uv.push(i / nu, j / nv);
+      }
+    }
+    for (var j2 = 0; j2 < nv; j2++) {
+      for (var i2 = 0; i2 < nu; i2++) {
+        var a = j2 * (nu + 1) + i2, b = a + 1, c = a + nu + 1, d = c + 1;
+        idx.push(a, c, b, b, c, d);
+      }
+    }
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return g;
+  }
+  var BA = 0.85, BB = 0.55, BC = 0.38, BE = 0.32;
+  var bodyGeo = buildSurface(function (s, t) {
+    var u = (s - 0.5) * 2 * Math.PI;      /* alrededor */
+    var v = (t - 0.5) * Math.PI;          /* de abajo a arriba */
+    return [
+      BA * sgnPow(Math.cos(v), BE) * sgnPow(Math.cos(u), BE),
+      BB * sgnPow(Math.sin(v), BE),
+      BC * sgnPow(Math.cos(v), BE) * sgnPow(Math.sin(u), BE)
+    ];
+  }, 96, 48);
+
+  /* ---------- Textura de toldo de pastelería ---------- */
+  function awningTexture() {
+    var c = document.createElement('canvas'); c.width = 1024; c.height = 512;
+    var g = c.getContext('2d');
+    g.fillStyle = '#fbe4d6'; g.fillRect(0, 0, 1024, 512);
+    var n = 24, w = 1024 / n, bandH = 96, stripeEnd = 230;
+    for (var i = 0; i < n; i++) {
+      g.fillStyle = i % 2 ? '#fbe9dc' : '#f2aebd';
+      g.fillRect(i * w, 0, w + 1, stripeEnd - w / 2);
+      g.beginPath(); g.arc(i * w + w / 2, stripeEnd - w / 2, w / 2, 0, Math.PI); g.fill();
+    }
+    g.fillStyle = '#c98ca8'; g.fillRect(0, 0, 1024, bandH);
+    g.fillStyle = '#e6bfd0';
+    for (var k = 0; k < 8; k++) { g.beginPath(); g.arc(64 + k * 128, bandH / 2, 9, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#f6c9cf';
+    for (var m = 0; m < 14; m++) { g.beginPath(); g.arc(40 + m * 74, 330 + (m % 2) * 56, 7, 0, Math.PI * 2); g.fill(); }
+    var t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    t.anisotropy = 4;
+    return t;
+  }
+  var bodyMat = new THREE.MeshStandardMaterial({ map: awningTexture(), roughness: 0.62, metalness: 0.0 });
+  var bag = new THREE.Group();
+  var body = new THREE.Mesh(bodyGeo, bodyMat);
+  bag.add(body);
+
+  /* Cierre estilo puerta de la pastelería */
+  var clasp = new THREE.Mesh(
+    new THREE.SphereGeometry(0.075, 24, 16),
+    new THREE.MeshStandardMaterial({ color: 0x5aa9bf, roughness: 0.35 })
+  );
+  clasp.position.set(0, 0.12, BC + 0.01);
+  clasp.scale.set(1, 1, 0.6);
+  bag.add(clasp);
+  var ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.105, 0.016, 12, 36),
+    new THREE.MeshStandardMaterial({ color: 0xfbe4d6, roughness: 0.5 })
+  );
+  ring.position.set(0, 0.12, BC + 0.008);
+  bag.add(ring);
+
+  /* ---------- Asa: toroide paramétrico (2 sliders) ---------- */
+  var leather = new THREE.MeshStandardMaterial({ color: 0x8a4b2f, roughness: 0.5 });
+  var handle = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.05, 20, 64, Math.PI), leather);
+  var capA = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), leather);
+  var capB = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), leather);
+  /* TRANSFORMACIONES LOCALES (jerarquía):
+   * handle, capA y capB son hijos de `bag`. Su matriz local M_local (traslación en y = HY,
+   * y en x = ±R más escala = r para las tapas) se compone con la del padre:
+   *   M_mundo(hijo) = M_bag · M_local(hijo)
+   * Así, al girar el bolso, el asa y las tapas giran con él sin código extra.
+   */
+  var HY = BB - 0.035;
+  handle.position.y = HY; capA.position.y = HY; capB.position.y = HY;
+  bag.add(handle, capA, capB);
+
+  function updateHandle() {
+    var R = parseFloat(sR.value), r = parseFloat(sr.value);
+    handle.geometry.dispose();
+    handle.geometry = new THREE.TorusGeometry(R, r, 20, 64, Math.PI);
+    /* Traslación en x (±R) y ESCALA uniforme (r) de las tapas: se guardan en su matriz local. */
+    capA.position.x = R; capB.position.x = -R;
+    capA.scale.setScalar(r); capB.scale.setScalar(r);
+    oR.textContent = R.toFixed(2);
+    or_.textContent = r.toFixed(2);
+    vals.textContent = 'R = ' + R.toFixed(2) + ' · r = ' + r.toFixed(2);
+  }
+
+  /* La matriz de modelo del bolso se arma a mano en renderOnce() (T · Rx · Ry),
+   * por eso se desactiva el cálculo automático desde position/rotation/scale. */
+  bag.matrixAutoUpdate = false;
+  scene.add(bag);
+
+  /* Sombra suave en el piso */
+  var sc = document.createElement('canvas'); sc.width = sc.height = 128;
+  var sg = sc.getContext('2d');
+  var grad = sg.createRadialGradient(64, 64, 4, 64, 64, 62);
+  grad.addColorStop(0, 'rgba(120,60,85,0.45)'); grad.addColorStop(1, 'rgba(120,60,85,0)');
+  sg.fillStyle = grad; sg.fillRect(0, 0, 128, 128);
+  var shadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.8, 1.6),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc), transparent: true, depthWrite: false })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = -BB - 0.03;
+  scene.add(shadow);
+
+  /* ---------- Interacción ---------- */
+  var rotY = -0.55, rotX = 0.12, dragging = false, lx = 0, ly = 0;
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var auto = false;
+  function setAuto(v) { auto = v; spinBtn.setAttribute('aria-pressed', String(v)); }
+  setAuto(!reduce);
+
+  stage.addEventListener('pointerdown', function (e) {
+    dragging = true; lx = e.clientX; ly = e.clientY;
+    stage.classList.add('drag');
+    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  stage.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    rotY += (e.clientX - lx) * 0.01;
+    rotX = Math.max(-0.5, Math.min(0.8, rotX + (e.clientY - ly) * 0.006));
+    lx = e.clientX; ly = e.clientY;
+    renderOnce();
+  });
+  function endDrag() { dragging = false; stage.classList.remove('drag'); }
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+
+  function onSlide() { updateHandle(); renderOnce(); }
+  sR.addEventListener('input', onSlide);
+  sr.addEventListener('input', onSlide);
+  spinBtn.addEventListener('click', function () { setAuto(!auto); });
+  document.getElementById('reset').addEventListener('click', function () {
+    sR.value = DEF.R; sr.value = DEF.r; rotY = -0.55; rotX = 0.12; onSlide();
+    statusEl.textContent = '';
+  });
+  document.getElementById('copy').addEventListener('click', function () {
+    var txt = JSON.stringify({ radioAsa: +parseFloat(sR.value).toFixed(2), grosorAsa: +parseFloat(sr.value).toFixed(3) });
+    function ok() { statusEl.textContent = 'Copiado: ' + txt; }
+    function fail() { statusEl.textContent = 'Valores actuales: ' + txt; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(ok, fail);
+    } else { fail(); }
+  });
+
+  /* ---------- Render ---------- */
+  function resize() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.position.z = w / h < 1.1 ? 6.4 : 5.2;
+    camera.updateProjectionMatrix();   /* <- recalcula la MATRIZ DE PROYECCIÓN con el nuevo aspect */
+    /* Misma matriz P escrita a mano, solo para mostrar de dónde sale:
+     *   top = near · tan(fov/2), right = top · aspect  ->  frustum simétrico */
+    var top = camera.near * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    var right = top * camera.aspect;
+    projMatrix.makePerspective(-right, right, top, -top, camera.near, camera.far);
+    /* projMatrix.elements debe coincidir con camera.projectionMatrix.elements */
+    renderOnce();
+  }
+
+  var projMatrix = new THREE.Matrix4();   /* P explícita (referencia didáctica) */
+  var Rx = new THREE.Matrix4(), Ry = new THREE.Matrix4(), T = new THREE.Matrix4();
+
+  function renderOnce() {
+    /* ===== MATRIZ DE MODELO (M) del bolso =====
+     * Se compone en este orden (se aplica de derecha a izquierda sobre cada vértice):
+     *   M = T · Rx · Ry
+     *   Ry: rotación alrededor del eje Y (arrastre horizontal / giro automático)
+     *   Rx: rotación alrededor del eje X (arrastre vertical, inclinación)
+     *   T : traslación (0, 0.05, 0) que sube el bolso sobre su sombra
+     */
+    Ry.makeRotationY(rotY);
+    Rx.makeRotationX(rotX);
+    T.makeTranslation(0, 0.05, 0);
+    bag.matrix.copy(T).multiply(Rx).multiply(Ry);
+    bag.matrixWorldNeedsUpdate = true;   /* obliga a recalcular matrixWorld de bag y sus hijos */
+
+    /* render(): internamente calcula V = inverse(camera.matrixWorld) y, por cada malla,
+     * modelViewMatrix = V · M_mundo; luego el shader aplica P (projectionMatrix). */
+    renderer.render(scene, camera);
+  }
+  function loop() {
+    if (auto && !dragging) { rotY += 0.006; }
+    renderOnce();
+    requestAnimationFrame(loop);
+  }
+  if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
+  window.addEventListener('resize', resize);
+  updateHandle();
+  resize();
+  loop();
+})();
+</script>
+
+</body></html>
