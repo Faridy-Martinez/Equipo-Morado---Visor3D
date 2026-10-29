@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>falda</title>
+<title>Probador de faldas 3D</title>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#fde9ec;--card:#fff7f2;--ink:#5b3a4a;--pink:#f6c6d2;--mauve:#c98aa8;--teal:#4fb3c4;--line:#e9b8c8;
@@ -43,11 +43,20 @@ Teclado: ←→ eje Y · ↑↓ eje X · Q/E eje Z · R reinicia · Espacio gira
 const cv=document.getElementById('c'),g=cv.getContext('2d'),W=cv.width,H=cv.height;
 let rx=-0.25,ry=0.6,rz=0,auto=false;
 
-/* ---- Matrices de rotación 3x3 ---- */
+/* ============================================================
+   PASO 1 · MATRICES DE ROTACIÓN (una por eje)
+   Cada función recibe un ángulo en radianes y devuelve una
+   matriz 3x3 que gira un punto alrededor de ese eje:
+   Rx -> eje X (inclinar adelante/atrás)
+   Ry -> eje Y (girar a izquierda/derecha)
+   Rz -> eje Z (girar como un reloj)
+   ============================================================ */
 const Rx=a=>[[1,0,0],[0,Math.cos(a),-Math.sin(a)],[0,Math.sin(a),Math.cos(a)]];
 const Ry=a=>[[Math.cos(a),0,Math.sin(a)],[0,1,0],[-Math.sin(a),0,Math.cos(a)]];
 const Rz=a=>[[Math.cos(a),-Math.sin(a),0],[Math.sin(a),Math.cos(a),0],[0,0,1]];
+/* mul(A,B): multiplica dos matrices 3x3 (sirve para COMBINAR rotaciones) */
 const mul=(A,B)=>A.map((_,i)=>B[0].map((_,j)=>A[i][0]*B[0][j]+A[i][1]*B[1][j]+A[i][2]*B[2][j]));
+/* apply(M,p): APLICA la matriz M a un punto p=[x,y,z] (matriz × vector) */
 const apply=(M,p)=>[M[0][0]*p[0]+M[0][1]*p[1]+M[0][2]*p[2],M[1][0]*p[0]+M[1][1]*p[1]+M[1][2]*p[2],M[2][0]*p[0]+M[2][1]*p[1]+M[2][2]*p[2]];
 
 /* ---- Paletas ---- */
@@ -76,6 +85,10 @@ bow.forEach((p,k)=>quads.push({p:p,c:k<2?'b':'t',tint:1,fixed:true}));
 /* ---- Render ---- */
 const L=[0.4,0.7,0.6];
 function draw(){
+ /* PASO 2 · MATRIZ TOTAL: se combinan las tres rotaciones en una sola.
+    R = Rz · Ry · Rx  (se aplica primero Rx, luego Ry y al final Rz).
+    Se calcula una vez por fotograma con los ángulos rx, ry, rz
+    que cambian con el ratón o el teclado. */
  const R=mul(Rz(rz),mul(Ry(ry),Rx(rx)));
  /* fondo: cielo, edificios, suelo */
  g.fillStyle='#bfe6ee';g.fillRect(0,0,W,H);
@@ -83,10 +96,24 @@ function draw(){
  g.fillStyle='#d9a0b6';[[0,300,70],[210,330,80],[520,310,90],[640,270,120]].forEach(b=>g.fillRect(b[0],b[1],b[2],H));
  g.fillStyle='#f0c9b4';g.fillRect(0,H*0.78,W,H);
  g.fillStyle='#fff0d8';g.beginPath();g.ellipse(W/2,H*0.9,210,34,0,0,6.2832);g.fill();
- /* proyectar */
+ /* ============================================================
+    PASO 3 · TRANSFORMAR + PROYECTAR cada vértice de la falda
+    f   = distancia focal (más alto = menos perspectiva)
+    cam = distancia de la cámara al objeto
+    sc  = escala en píxeles
+    ============================================================ */
  const f=520,cam=4.6,sc=170,out=[];
  quads.forEach(q=>{
-  const v=q.p.map(p=>{const r=apply(R,p),k=f/(f+(r[2]+cam)*60);return{x:W/2+r[0]*sc*k*1.1,y:H*0.46-r[1]*sc*k*1.1,z:r[2],r:r}});
+  const v=q.p.map(p=>{
+   /* (a) MATRIZ DE TRANSFORMACIÓN: gira el punto 3D con R */
+   const r=apply(R,p);
+   /* (b) PROYECCIÓN EN PERSPECTIVA: k encoge lo que está lejos (z grande) */
+   const k=f/(f+(r[2]+cam)*60);
+   /* (c) Paso a pantalla 2D: x,y proyectados (el eje Y se invierte en canvas).
+         Se guarda z para ordenar las caras después (algoritmo del pintor). */
+   return{x:W/2+r[0]*sc*k*1.1,y:H*0.46-r[1]*sc*k*1.1,z:r[2],r:r}});
+  /* Normal de la cara: se calcula con los puntos YA rotados (v[i].r),
+     así la luz y el lado de atrás/adelante cambian al girar la falda. */
   const a=[v[1].r[0]-v[0].r[0],v[1].r[1]-v[0].r[1],v[1].r[2]-v[0].r[2]],b=[v[2].r[0]-v[0].r[0],v[2].r[1]-v[0].r[1],v[2].r[2]-v[0].r[2]];
   let n=[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];const l=Math.hypot(...n)||1;n=n.map(x=>x/l);
   const d=Math.abs(n[0]*L[0]+n[1]*L[1]+n[2]*L[2]);
@@ -97,7 +124,7 @@ function draw(){
  out.forEach(o=>{const c=rgb(P[o.c]),s=o.sh*(o.back?0.88:1);
   g.fillStyle=`rgb(${c.map(x=>Math.min(255,x*s)|0)})`;g.strokeStyle='rgba(255,255,255,.35)';g.lineWidth=1;
   g.beginPath();o.v.forEach((p,i)=>i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y));g.closePath();g.fill();g.stroke()});
- /* matriz */
+ /* Muestra en pantalla los 9 números de la matriz R actual */
  document.getElementById('mat').innerHTML=R.flat().map(x=>`<span>${x.toFixed(2)}</span>`).join('');
 }
 /* ---- Entrada ---- */
